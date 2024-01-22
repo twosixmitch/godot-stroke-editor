@@ -84,19 +84,27 @@ func change_character(index: int):
 	var trace = traces[index]
 	%CharacterLabel.text = "%s" % trace.character
 	
-	create_stroke_tree(trace)
-	create_stroke_point_nodes(trace)
+	selected_stroke_index = -1
+	selected_stroke_point_index = -1
 	
-	change_stroke(0, -1)
+	stroke_tree.clear()
 	
-
-func create_stroke_point_nodes(trace: Trace):
 	for key in stroke_point_nodes.keys():
 		for item in stroke_point_nodes[key]:
 			item.queue_free()
-	
+
 	stroke_point_nodes.clear()
 	
+	if trace.strokes.size() > 0:
+		create_stroke_tree(trace)
+		create_stroke_point_nodes(trace)
+		
+		selected_stroke_index = 0
+		change_selection(0, -1)
+		deselect_points(0)
+
+
+func create_stroke_point_nodes(trace: Trace):
 	var strokes = trace.strokes
 	for s_idx in range(0, strokes.size()):
 		var stroke = strokes[s_idx]
@@ -117,8 +125,6 @@ func create_stroke_point_nodes(trace: Trace):
 
 
 func create_stroke_tree(trace: Trace):
-	stroke_tree.clear()
-	
 	var root = stroke_tree.create_item()
 	stroke_tree.hide_root = true
 	
@@ -134,9 +140,14 @@ func create_stroke_tree(trace: Trace):
 			point_node.set_text(0, "Point %s" % p_idx)
 	
 
-func change_stroke(stroke_index: int, point_index: int):
+func change_selection(stroke_index: int, point_index: int):
 	if [stroke_index, point_index] == [selected_stroke_index, selected_stroke_point_index]:
-		# Nothing should change, early escape
+		if point_index > -1:
+			var point = stroke_point_nodes[stroke_index][point_index]
+			point.toggle_selection()
+		else:
+			for point in stroke_point_nodes[stroke_index]:
+				point.toggle_selection()
 		return
 	
 	var old_stroke_index = selected_stroke_index
@@ -151,9 +162,11 @@ func change_stroke(stroke_index: int, point_index: int):
 	if old_stroke_index == new_stroke_index:
 		# We are changing the selected point		
 		if new_point_index == -1:
-			pass # TODO: deselect all points
+			deselect_points(selected_stroke_index)
 		else:
-			pass # TODO: select this point only
+			select_point(new_point_index)
+			if old_point_index > -1:
+				deselect_point(old_point_index)
 	else:
 		# We are changing the selected stroke
 		if old_stroke_index > -1:
@@ -161,7 +174,25 @@ func change_stroke(stroke_index: int, point_index: int):
 				point.make_active(false)
 		
 		for point in stroke_point_nodes[new_stroke_index]:
-			point.make_active(true)	
+			point.make_active(true)
+			
+		if new_point_index > -1:
+			select_point(new_point_index)
+
+
+func deselect_points(stroke_index: int):
+	for point in stroke_point_nodes[stroke_index]:
+		point.deselect()
+		
+
+func deselect_point(point_index: int):
+	var point = stroke_point_nodes[selected_stroke_index][point_index]
+	point.deselect()
+
+
+func select_point(point_index: int):
+	var point = stroke_point_nodes[selected_stroke_index][point_index]
+	point.select()
 
 
 func _on_item_list_item_activated(index):
@@ -182,4 +213,4 @@ func _on_tree_item_activated():
 		point_index = item.get_index()
 		stroke_index = item.get_parent().get_index()
 	
-	change_stroke(stroke_index, point_index)
+	change_selection(stroke_index, point_index)
