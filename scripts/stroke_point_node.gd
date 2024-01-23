@@ -4,10 +4,12 @@ extends Node
 
 var is_active: bool
 var is_selected: bool
+var index: int
 
 
-func setup(number: int):
-	%Label.text = "%s" % number
+func setup(_index: int):
+	index = _index
+	%Label.text = "%s" % index
 
 
 func make_active(active: bool):
@@ -41,4 +43,4 @@ func toggle_selection():
 func _gui_input(event):
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
 		if is_active:
-			toggle_selection()
+			EventBus.stroke_point_pressed.emit(index)

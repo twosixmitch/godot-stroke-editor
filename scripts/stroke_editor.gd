@@ -2,6 +2,8 @@ class_name StrokeEditor
 
 extends Control
 
+enum EditorMode { EDIT, ADD }
+
 @export var character: Label
 @export var character_list: ItemList
 @export var stroke_tree: Tree
@@ -12,17 +14,57 @@ var stroke_point_nodes: Dictionary
 var selected_character_index: int = -1
 var selected_stroke_index: int = -1
 var selected_stroke_point_index: int = -1
+var shift_key_held: bool
+var editor_mode: EditorMode
 
 
 func _ready():
+	%SaveButton.disabled = true
 	%LoadButton.pressed.connect(self.load_pressed)
+	%SaveButton.pressed.connect(self.save_pressed)
 	%LoadFileDialog.file_selected.connect(self.load_file_selected)
+	%SaveFileDialog.file_selected.connect(self.save_file_selected)
+	EventBus.stroke_point_pressed.connect(_on_stroke_point_pressed)
 	
+
+func _on_stroke_point_pressed(point_index: int):
+	if editor_mode == EditorMode.EDIT:
+		var point = stroke_point_nodes[selected_stroke_index][point_index]
+		point.toggle_selection()
+
+
+func _input(event):
+	if event is InputEventKey and event.keycode == KEY_SHIFT:
+		shift_key_held = event.is_pressed()
+		
+	if event is InputEventKey and event.keycode == KEY_ESCAPE:
+		deselect_points()
+	
+	if event is InputEventKey and event.pressed:
+		if event.keycode == KEY_W:
+			move_selected_points(Vector2(0, -1))
+		elif event.keycode == KEY_A:
+			move_selected_points(Vector2(-1, 0))
+		elif event.keycode == KEY_S:
+			move_selected_points(Vector2(0, 1))
+		elif event.keycode == KEY_D:
+			move_selected_points(Vector2(1, 0))
+
+
+func move_selected_points(direction: Vector2):
+	if shift_key_held:
+		direction = direction * 10
+		
+	var points = stroke_point_nodes[selected_stroke_index]
+	for point in points:
+		if point.is_active and point.is_selected:
+			point.position = point.position + direction
+
 
 func load_pressed():
 	get_node(^"LoadFileDialog").popup_centered()
-
-
+	
+	
 func load_file_selected(path: String):
 	if FileAccess.file_exists(path):	
 		var file = FileAccess.open(path, FileAccess.READ)
@@ -32,54 +74,41 @@ func load_file_selected(path: String):
 		while not file.eof_reached():
 			lines.append(file.get_csv_line())
 		
-		self.load(lines)
+		traces = Serialization.import(lines)
+	
+		character_list.clear()
+		for trace in traces:
+			character_list.add_item("%s" % trace.character)
+		
+		character_list.select(0)
+		change_character(0)
+		
+		%SaveButton.disabled = false
+		%TraceControlsPanel.visible = true
 		
 		return true
 	return false
 
 
-func load(file_lines: Array[PackedStringArray]):
-	traces = create_trace_models(file_lines)
-	
-	character_list.clear()
-	for trace in traces:
-		character_list.add_item("%s" % trace.character)
-	
-	character_list.select(0)
-	change_character(0)
-	
-	
-func create_trace_models(file_lines: Array[PackedStringArray]) -> Array[Trace]:
-	var results: Array[Trace] = []
-	
-	for line in file_lines:
-		var trace = Trace.new()
-		trace.character = line[0]
-		
-		var current_stroke_id: String = ""
-		var current_stroke: Trace.Stroke = null
+func save_pressed():
+	get_node(^"SaveFileDialog").popup_centered()
 
-		for index in range(2, line.size(), 3):
-			var stroke_id = line[index]
-			var point_x   = line[index+1]
-			var point_y   = line[index+2]
 
-			if stroke_id != current_stroke_id:
-				current_stroke_id = stroke_id
-				current_stroke = Trace.Stroke.new()
-				trace.strokes.append(current_stroke)
-			
-			# TODO: Remove negative
-			var point = Vector2(int(point_x), -int(point_y))
-			current_stroke.points.append(point)
+func save_file_selected(path: String):
+	var file = FileAccess.open(path, FileAccess.WRITE)
+	var lines = Serialization.export(traces)
+	for line in lines:
+		file.store_csv_line(line)
+	file.close()
+	return true
 
-		results.append(trace)
-		
-	return results
-	
 	
 func change_character(index: int):
 	selected_character_index = index
+	
+	editor_mode = EditorMode.EDIT
+	%EditCheckBox.button_pressed = true
+	%AddCheckBox.button_pressed = false
 	
 	var trace = traces[index]
 	%CharacterLabel.text = "%s" % trace.character
@@ -101,7 +130,7 @@ func change_character(index: int):
 		
 		selected_stroke_index = 0
 		change_selection(0, -1)
-		deselect_points(0)
+		deselect_points()
 
 
 func create_stroke_point_nodes(trace: Trace):
@@ -119,7 +148,7 @@ func create_stroke_point_nodes(trace: Trace):
 			point_node.setup(p_idx)
 			point_node.make_active(active)
 			
-			#point_node.position = (point_position * trace_scale_vec) + translation
+			# TODO: point_node.position = (point_position * trace_scale_vec) + translation
 			point_node.position = stroke.points[p_idx]
 			%TracePointsContainer.add_child(point_node)
 
@@ -162,7 +191,7 @@ func change_selection(stroke_index: int, point_index: int):
 	if old_stroke_index == new_stroke_index:
 		# We are changing the selected point		
 		if new_point_index == -1:
-			deselect_points(selected_stroke_index)
+			deselect_points()
 		else:
 			select_point(new_point_index)
 			if old_point_index > -1:
@@ -180,8 +209,8 @@ func change_selection(stroke_index: int, point_index: int):
 			select_point(new_point_index)
 
 
-func deselect_points(stroke_index: int):
-	for point in stroke_point_nodes[stroke_index]:
+func deselect_points():
+	for point in stroke_point_nodes[selected_stroke_index]:
 		point.deselect()
 		
 
@@ -196,7 +225,8 @@ func select_point(point_index: int):
 
 
 func _on_item_list_item_activated(index):
-	change_character(index)
+	if index != selected_character_index:
+		change_character(index)
 	
 
 func _on_tree_item_activated():
@@ -214,3 +244,13 @@ func _on_tree_item_activated():
 		stroke_index = item.get_parent().get_index()
 	
 	change_selection(stroke_index, point_index)
+
+
+func _on_edit_check_box_pressed():
+	editor_mode = EditorMode.EDIT
+
+
+func _on_add_check_box_pressed():
+	editor_mode = EditorMode.ADD
+	if selected_stroke_index > -1:
+		deselect_points()

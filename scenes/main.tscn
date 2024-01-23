@@ -27,6 +27,16 @@ initial_position = 1
 size = Vector2i(600, 400)
 ok_button_text = "Open"
 file_mode = 0
+access = 2
+use_native_dialog = true
+
+[node name="SaveFileDialog" type="FileDialog" parent="."]
+unique_name_in_owner = true
+initial_position = 1
+size = Vector2i(600, 400)
+ok_button_text = "Save"
+access = 2
+use_native_dialog = true
 
 [node name="CharacterLabel" type="Label" parent="."]
 unique_name_in_owner = true
@@ -53,6 +63,8 @@ grow_horizontal = 2
 grow_vertical = 2
 
 [node name="TraceControlsPanel" type="Panel" parent="."]
+unique_name_in_owner = true
+visible = false
 layout_mode = 1
 anchors_preset = 7
 anchor_left = 0.5
@@ -82,6 +94,7 @@ grow_vertical = 2
 theme_override_constants/separation = 10
 
 [node name="EditCheckBox" type="CheckBox" parent="TraceControlsPanel/VBoxContainer"]
+unique_name_in_owner = true
 layout_mode = 2
 theme_override_font_sizes/font_size = 24
 button_pressed = true
@@ -90,6 +103,7 @@ button_group = SubResource("ButtonGroup_f8v6g")
 text = "edit"
 
 [node name="AddCheckBox" type="CheckBox" parent="TraceControlsPanel/VBoxContainer"]
+unique_name_in_owner = true
 layout_mode = 2
 theme_override_font_sizes/font_size = 24
 button_group = SubResource("ButtonGroup_f8v6g")
@@ -124,6 +138,7 @@ layout_mode = 2
 text = "Load"
 
 [node name="SaveButton" type="Button" parent="LeftHandside/FileControlsContainer/VBoxContainer"]
+unique_name_in_owner = true
 custom_minimum_size = Vector2(0, 50)
 layout_mode = 2
 text = "Save"
@@ -171,6 +186,8 @@ size_flags_vertical = 3
 [node name="Tree" type="Tree" parent="RightHandside/PanelContainer"]
 layout_mode = 2
 
+[connection signal="pressed" from="TraceControlsPanel/VBoxContainer/EditCheckBox" to="." method="_on_edit_check_box_pressed"]
+[connection signal="pressed" from="TraceControlsPanel/VBoxContainer/AddCheckBox" to="." method="_on_add_check_box_pressed"]
 [connection signal="item_activated" from="LeftHandside/CharacterContainer/ItemList" to="." method="_on_item_list_item_activated"]
 [connection signal="item_clicked" from="LeftHandside/CharacterContainer/ItemList" to="." method="_on_item_list_item_clicked"]
 [connection signal="button_clicked" from="RightHandside/PanelContainer/Tree" to="." method="_on_tree_button_clicked"]
