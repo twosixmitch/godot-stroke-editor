@@ -29,16 +29,32 @@ func _ready():
 
 func _on_stroke_point_pressed(point_index: int):
 	if editor_mode == EditorMode.EDIT:
-		var point = stroke_point_nodes[selected_stroke_index][point_index]
-		point.toggle_selection()
+		handle_stroke_point_chosen(point_index)
+		
 
+func handle_stroke_point_chosen(point_index: int):
+	# Have I clicked on a point for the first time?
+	if selected_stroke_point_index == -1:
+		select_point(point_index)
+	# Have I clicked on an already selected point?
+	elif point_index == selected_stroke_point_index:
+		deselect_point(selected_stroke_point_index)
+	# I have clicked on a different point so I should switch selection to it
+	else:
+		deselect_point(selected_stroke_point_index)
+		select_point(point_index)
+	
 
 func _input(event):
 	if event is InputEventKey and event.keycode == KEY_SHIFT:
 		shift_key_held = event.is_pressed()
 		
-	if event is InputEventKey and event.keycode == KEY_ESCAPE:
-		deselect_points()
+	if event is InputEventKey and event.pressed and event.keycode == KEY_ESCAPE:
+		if selected_stroke_point_index > -1:
+			deselect_all_points()
+	
+	if event is InputEventKey and event.pressed and event.keycode == KEY_DELETE:
+		delete_selected_points()
 	
 	if event is InputEventKey and event.pressed:
 		if event.keycode == KEY_W:
@@ -127,10 +143,7 @@ func change_character(index: int):
 	if trace.strokes.size() > 0:
 		create_stroke_tree(trace)
 		create_stroke_point_nodes(trace)
-		
-		selected_stroke_index = 0
-		change_selection(0, -1)
-		deselect_points()
+		change_stroke(0)
 
 
 func create_stroke_point_nodes(trace: Trace):
@@ -169,59 +182,60 @@ func create_stroke_tree(trace: Trace):
 			point_node.set_text(0, "Point %s" % p_idx)
 	
 
-func change_selection(stroke_index: int, point_index: int):
-	if [stroke_index, point_index] == [selected_stroke_index, selected_stroke_point_index]:
-		if point_index > -1:
-			var point = stroke_point_nodes[stroke_index][point_index]
-			point.toggle_selection()
-		else:
-			for point in stroke_point_nodes[stroke_index]:
-				point.toggle_selection()
+func change_stroke(stroke_index):
+	if stroke_index == selected_stroke_index:
 		return
 	
 	var old_stroke_index = selected_stroke_index
 	var new_stroke_index = stroke_index
 	
-	var old_point_index = selected_stroke_point_index
-	var new_point_index = point_index
-	
 	selected_stroke_index = new_stroke_index
-	selected_stroke_point_index = new_point_index
 	
-	if old_stroke_index == new_stroke_index:
-		# We are changing the selected point		
-		if new_point_index == -1:
-			deselect_points()
-		else:
-			select_point(new_point_index)
-			if old_point_index > -1:
-				deselect_point(old_point_index)
-	else:
-		# We are changing the selected stroke
-		if old_stroke_index > -1:
-			for point in stroke_point_nodes[old_stroke_index]:
-				point.make_active(false)
-		
-		for point in stroke_point_nodes[new_stroke_index]:
-			point.make_active(true)
-			
-		if new_point_index > -1:
-			select_point(new_point_index)
-
-
-func deselect_points():
-	for point in stroke_point_nodes[selected_stroke_index]:
-		point.deselect()
+	# We are changing the selected stroke
+	if old_stroke_index > -1:
+		for point in stroke_point_nodes[old_stroke_index]:
+			point.deselect()
+			point.make_active(false)
+	
+	for point in stroke_point_nodes[new_stroke_index]:
+		point.make_active(true)
 		
 
 func deselect_point(point_index: int):
+	selected_stroke_point_index = -1  # TODO: Introduce a selected indices array? Or has selected check
 	var point = stroke_point_nodes[selected_stroke_index][point_index]
 	point.deselect()
 
 
 func select_point(point_index: int):
+	selected_stroke_point_index = point_index
 	var point = stroke_point_nodes[selected_stroke_index][point_index]
 	point.select()
+
+
+func select_all_points():
+	selected_stroke_point_index = 0
+	for point in stroke_point_nodes[selected_stroke_index]:
+		point.select()
+		
+
+func deselect_all_points():
+	selected_stroke_point_index = -1
+	for point in stroke_point_nodes[selected_stroke_index]:
+		point.deselect()
+
+
+func delete_selected_points():
+	if selected_stroke_index > -1:
+		selected_stroke_point_index = -1
+		var all_points: Array = stroke_point_nodes[selected_stroke_index]
+		var selected_points = all_points.filter(func(point): return point.is_selected)
+		
+		# TODO: Update stroke tree
+		
+		for selected_point in selected_points:
+			selected_point.queue_free()
+			all_points.erase(selected_point)
 
 
 func _on_item_list_item_activated(index):
@@ -230,6 +244,7 @@ func _on_item_list_item_activated(index):
 	
 
 func _on_tree_item_activated():
+	# switch_mode(EditorMode.EDIT) # TODO: Implement
 	var item = stroke_tree.get_selected()
 	
 	var stroke_index = -1
@@ -238,12 +253,22 @@ func _on_tree_item_activated():
 	if item.get_child_count() > 0:
 		# Selected a stroke
 		stroke_index = item.get_index()
+		if stroke_index == selected_stroke_index:
+			if selected_stroke_point_index > -1:
+				deselect_all_points()
+			else:
+				select_all_points()
+		else:
+			change_stroke(stroke_index)
 	else:
 		# Selected a stroke point
 		point_index = item.get_index()
 		stroke_index = item.get_parent().get_index()
-	
-	change_selection(stroke_index, point_index)
+		if stroke_index == selected_stroke_index:
+			handle_stroke_point_chosen(point_index)
+		else:
+			change_stroke(stroke_index)
+			select_point(point_index)
 
 
 func _on_edit_check_box_pressed():
@@ -252,5 +277,5 @@ func _on_edit_check_box_pressed():
 
 func _on_add_check_box_pressed():
 	editor_mode = EditorMode.ADD
-	if selected_stroke_index > -1:
-		deselect_points()
+	if selected_stroke_index > -1 and selected_stroke_point_index > -1:
+		deselect_point(selected_stroke_point_index)
