@@ -9,11 +9,10 @@ enum EditorMode { EDIT, ADD }
 @export var stroke_tree: Tree
 @export var stroke_point_scene: PackedScene
 
-var traces: Array[Trace]
+var traces: Array[Trace] = []
 var stroke_point_nodes: Dictionary
 var selected_character_index: int = -1
 var selected_stroke_index: int = -1
-var selected_stroke_point_index: int = -1
 var shift_key_held: bool
 var editor_mode: EditorMode
 
@@ -25,33 +24,17 @@ func _ready():
 	%LoadFileDialog.file_selected.connect(self.load_file_selected)
 	%SaveFileDialog.file_selected.connect(self.save_file_selected)
 	EventBus.stroke_point_pressed.connect(_on_stroke_point_pressed)
-	
 
-func _on_stroke_point_pressed(point_index: int):
-	if editor_mode == EditorMode.EDIT:
-		handle_stroke_point_chosen(point_index)
-		
-
-func handle_stroke_point_chosen(point_index: int):
-	# Have I clicked on a point for the first time?
-	if selected_stroke_point_index == -1:
-		select_point(point_index)
-	# Have I clicked on an already selected point?
-	elif point_index == selected_stroke_point_index:
-		deselect_point(selected_stroke_point_index)
-	# I have clicked on a different point so I should switch selection to it
-	else:
-		deselect_point(selected_stroke_point_index)
-		select_point(point_index)
-	
 
 func _input(event):
+	if traces.size() == 0:
+		return
+ 
 	if event is InputEventKey and event.keycode == KEY_SHIFT:
 		shift_key_held = event.is_pressed()
 		
 	if event is InputEventKey and event.pressed and event.keycode == KEY_ESCAPE:
-		if selected_stroke_point_index > -1:
-			deselect_all_points()
+		deselect_all_points()
 	
 	if event is InputEventKey and event.pressed and event.keycode == KEY_DELETE:
 		delete_selected_points()
@@ -73,14 +56,14 @@ func move_selected_points(direction: Vector2):
 		
 	var points = stroke_point_nodes[selected_stroke_index]
 	for point in points:
-		if point.is_active and point.is_selected:
+		if point.is_selected:
 			point.position = point.position + direction
 
 
 func load_pressed():
 	get_node(^"LoadFileDialog").popup_centered()
-	
-	
+
+
 func load_file_selected(path: String):
 	if FileAccess.file_exists(path):	
 		var file = FileAccess.open(path, FileAccess.READ)
@@ -118,7 +101,7 @@ func save_file_selected(path: String):
 	file.close()
 	return true
 
-	
+
 func change_character(index: int):
 	selected_character_index = index
 	
@@ -126,19 +109,16 @@ func change_character(index: int):
 	%EditCheckBox.button_pressed = true
 	%AddCheckBox.button_pressed = false
 	
-	var trace = traces[index]
-	%CharacterLabel.text = "%s" % trace.character
-	
 	selected_stroke_index = -1
-	selected_stroke_point_index = -1
-	
 	stroke_tree.clear()
 	
 	for key in stroke_point_nodes.keys():
 		for item in stroke_point_nodes[key]:
 			item.queue_free()
-
 	stroke_point_nodes.clear()
+	
+	var trace = traces[index]
+	%CharacterLabel.text = "%s" % trace.character
 	
 	if trace.strokes.size() > 0:
 		create_stroke_tree(trace)
@@ -180,7 +160,7 @@ func create_stroke_tree(trace: Trace):
 		for p_idx in range(0, stroke.points.size()):
 			var point_node = stroke_tree.create_item(parent_node)
 			point_node.set_text(0, "Point %s" % p_idx)
-	
+
 
 func change_stroke(stroke_index):
 	if stroke_index == selected_stroke_index:
@@ -199,49 +179,67 @@ func change_stroke(stroke_index):
 	
 	for point in stroke_point_nodes[new_stroke_index]:
 		point.make_active(true)
-		
-
-func deselect_point(point_index: int):
-	selected_stroke_point_index = -1  # TODO: Introduce a selected indices array? Or has selected check
-	var point = stroke_point_nodes[selected_stroke_index][point_index]
-	point.deselect()
 
 
 func select_point(point_index: int):
-	selected_stroke_point_index = point_index
 	var point = stroke_point_nodes[selected_stroke_index][point_index]
 	point.select()
 
 
 func select_all_points():
-	selected_stroke_point_index = 0
 	for point in stroke_point_nodes[selected_stroke_index]:
 		point.select()
-		
+
+
+func deselect_point(point_index: int):
+	var point = stroke_point_nodes[selected_stroke_index][point_index]
+	point.deselect()
+
 
 func deselect_all_points():
-	selected_stroke_point_index = -1
 	for point in stroke_point_nodes[selected_stroke_index]:
 		point.deselect()
 
 
 func delete_selected_points():
-	if selected_stroke_index > -1:
-		selected_stroke_point_index = -1
-		var all_points: Array = stroke_point_nodes[selected_stroke_index]
-		var selected_points = all_points.filter(func(point): return point.is_selected)
-		
-		# TODO: Update stroke tree
-		
-		for selected_point in selected_points:
-			selected_point.queue_free()
-			all_points.erase(selected_point)
+	var all_points: Array = stroke_point_nodes[selected_stroke_index]
+	var selected_points = all_points.filter(func(point): return point.is_selected)
+	
+	# Gather up the indices of the selected point nodes
+	var selected_indices: Array = []
+	for idx in range(0, all_points.size()):
+		if all_points[idx].is_selected:
+			selected_indices.append(idx)
+	
+	# Delete the original point nodes
+	for selected_point in selected_points:
+		all_points.erase(selected_point)
+		selected_point.queue_free()
+	
+	# Re-assign indices to remaining point nodes	
+	for idx in range(0, all_points.size()):
+		all_points[idx].setup(idx)
+	
+	# Clear out the deleted points from the stroke tree
+	var root = stroke_tree.get_root()
+	var stroke_tree_item = root.get_child(selected_stroke_index)
+	
+	var selected_tree_items: Array = []
+	for idx in selected_indices:
+		selected_tree_items.append(stroke_tree_item.get_child(idx))
+	
+	for tree_item in selected_tree_items:
+		stroke_tree_item.remove_child(tree_item)
+	
+	for idx in range(0, stroke_tree_item.get_child_count()):
+		var point_item = stroke_tree_item.get_child(idx)
+		point_item.set_text(0, "Point %s" % idx)
 
 
 func _on_item_list_item_activated(index):
 	if index != selected_character_index:
 		change_character(index)
-	
+
 
 func _on_tree_item_activated():
 	# switch_mode(EditorMode.EDIT) # TODO: Implement
@@ -254,7 +252,7 @@ func _on_tree_item_activated():
 		# Selected a stroke
 		stroke_index = item.get_index()
 		if stroke_index == selected_stroke_index:
-			if selected_stroke_point_index > -1:
+			if has_selected_points():
 				deselect_all_points()
 			else:
 				select_all_points()
@@ -271,11 +269,37 @@ func _on_tree_item_activated():
 			select_point(point_index)
 
 
+func has_selected_points() -> bool:
+	var points: Array = stroke_point_nodes[selected_stroke_index]
+	return points.any(func(point): return point.is_selected)
+
+
+func _on_stroke_point_pressed(point_index: int):
+	if editor_mode == EditorMode.EDIT:
+		handle_stroke_point_chosen(point_index)
+
+
+func handle_stroke_point_chosen(point_index: int):
+	var all_points: Array = stroke_point_nodes[selected_stroke_index]
+	var selected_points = all_points.filter(func(point): return point.is_selected)
+	
+	# Have I clicked on a point for the first time?
+	if selected_points.size() == 0:
+		select_point(point_index)
+	# Have I clicked on an already selected point?
+	elif all_points[point_index] in selected_points:
+		deselect_point(point_index)
+	# I have clicked on a different point so I should switch selection to it
+	else:
+		deselect_all_points()
+		select_point(point_index)
+
+
 func _on_edit_check_box_pressed():
 	editor_mode = EditorMode.EDIT
 
 
 func _on_add_check_box_pressed():
 	editor_mode = EditorMode.ADD
-	if selected_stroke_index > -1 and selected_stroke_point_index > -1:
-		deselect_point(selected_stroke_point_index)
+	if selected_stroke_index > -1:
+		deselect_all_points()
