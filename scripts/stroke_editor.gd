@@ -58,6 +58,20 @@ func move_selected_points(direction: Vector2):
 	for point in points:
 		if point.is_selected:
 			point.position = point.position + direction
+	
+	refresh_stroke_tree_point_names()
+
+
+func refresh_stroke_tree_point_names():
+	var root = stroke_tree.get_root()
+	var stroke_tree_item = root.get_child(selected_stroke_index)
+	
+	var point_nodes = stroke_point_nodes[selected_stroke_index]
+	
+	for point_node in point_nodes:
+		var point_item = stroke_tree_item.get_child(point_node.index)
+		var pos = point_node.position
+		point_item.set_text(0, "Point %s (%s, %s)" % [point_node.index, pos.x, pos.y])		
 
 
 func load_pressed():
@@ -159,7 +173,8 @@ func create_stroke_tree(trace: Trace):
 		
 		for p_idx in range(0, stroke.points.size()):
 			var point_node = stroke_tree.create_item(parent_node)
-			point_node.set_text(0, "Point %s" % p_idx)
+			var pos = stroke.points[p_idx]
+			point_node.set_text(0, "Point %s  (%s, %s)" % [p_idx, pos.x, pos.y])
 
 
 func change_stroke(stroke_index):
@@ -231,9 +246,7 @@ func delete_selected_points():
 	for tree_item in selected_tree_items:
 		stroke_tree_item.remove_child(tree_item)
 	
-	for idx in range(0, stroke_tree_item.get_child_count()):
-		var point_item = stroke_tree_item.get_child(idx)
-		point_item.set_text(0, "Point %s" % idx)
+	refresh_stroke_tree_point_names()
 
 
 func _on_item_list_item_activated(index):
