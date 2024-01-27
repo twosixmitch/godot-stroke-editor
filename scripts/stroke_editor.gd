@@ -18,11 +18,10 @@ var editor_mode: EditorMode
 
 
 func _ready():
-	%SaveButton.disabled = true
-	%LoadButton.pressed.connect(self.load_pressed)
-	%SaveButton.pressed.connect(self.save_pressed)
 	%LoadFileDialog.file_selected.connect(self.load_file_selected)
 	%SaveFileDialog.file_selected.connect(self.save_file_selected)
+	%FileMenuButton.get_popup().id_pressed.connect(_on_file_item_menu_pressed)
+	%EditMenuButton.get_popup().id_pressed.connect(_on_edit_item_menu_pressed)
 	EventBus.stroke_point_pressed.connect(_on_stroke_point_pressed)
 
 
@@ -71,49 +70,7 @@ func refresh_stroke_tree_point_names():
 	for point_node in point_nodes:
 		var point_item = stroke_tree_item.get_child(point_node.index)
 		var pos = point_node.position
-		point_item.set_text(0, "Point %s (%s, %s)" % [point_node.index, pos.x, pos.y])		
-
-
-func load_pressed():
-	get_node(^"LoadFileDialog").popup_centered()
-
-
-func load_file_selected(path: String):
-	if FileAccess.file_exists(path):	
-		var file = FileAccess.open(path, FileAccess.READ)
-		var _header = file.get_csv_line()
-		
-		var lines: Array[PackedStringArray] = []
-		while not file.eof_reached():
-			lines.append(file.get_csv_line())
-		
-		traces = Serialization.import(lines)
-	
-		character_list.clear()
-		for trace in traces:
-			character_list.add_item("%s" % trace.character)
-		
-		character_list.select(0)
-		change_character(0)
-		
-		%SaveButton.disabled = false
-		%TraceControlsPanel.visible = true
-		
-		return true
-	return false
-
-
-func save_pressed():
-	get_node(^"SaveFileDialog").popup_centered()
-
-
-func save_file_selected(path: String):
-	var file = FileAccess.open(path, FileAccess.WRITE)
-	var lines = Serialization.export(traces)
-	for line in lines:
-		file.store_csv_line(line)
-	file.close()
-	return true
+		point_item.set_text(0, "Point %s  (%s, %s)" % [point_node.index, pos.x, pos.y])		
 
 
 func change_character(index: int):
@@ -135,8 +92,8 @@ func change_character(index: int):
 	%CharacterLabel.text = "%s" % trace.character
 	
 	if trace.strokes.size() > 0:
-		create_stroke_tree(trace)
 		create_stroke_point_nodes(trace)
+		create_stroke_tree()
 		change_stroke(0)
 
 
@@ -160,21 +117,19 @@ func create_stroke_point_nodes(trace: Trace):
 			%TracePointsContainer.add_child(point_node)
 
 
-func create_stroke_tree(trace: Trace):
+func create_stroke_tree():
 	var root = stroke_tree.create_item()
 	stroke_tree.hide_root = true
 	
-	var strokes = trace.strokes
-	for s_idx in range(0, strokes.size()):
-		var stroke = strokes[s_idx]
-	
-		var parent_node = stroke_tree.create_item(root)
-		parent_node.set_text(0, "Stroke %s" % s_idx)
+	for s_idx in stroke_point_nodes.keys():
+		var parent_item = stroke_tree.create_item(root)
+		parent_item.set_text(0, "Stroke %s" % s_idx)
 		
-		for p_idx in range(0, stroke.points.size()):
-			var point_node = stroke_tree.create_item(parent_node)
-			var pos = stroke.points[p_idx]
-			point_node.set_text(0, "Point %s  (%s, %s)" % [p_idx, pos.x, pos.y])
+		var stroke_points = stroke_point_nodes[s_idx]
+		for point_node in stroke_points:
+			var point_tree_item = stroke_tree.create_item(parent_item)	
+			var pos = point_node.position
+			point_tree_item.set_text(0, "Point %s  (%s, %s)" % [point_node.index, pos.x, pos.y])
 
 
 func change_stroke(stroke_index):
@@ -316,3 +271,118 @@ func _on_add_check_box_pressed():
 	editor_mode = EditorMode.ADD
 	if selected_stroke_index > -1:
 		deselect_all_points()
+		
+
+func _on_file_item_menu_pressed(id: int):
+	match id:
+		0: 
+			get_node(^"LoadFileDialog").popup_centered()
+		1: 
+			get_node(^"SaveFileDialog").popup_centered()
+		_: 
+			print("Unknown file menu item")
+
+
+func load_file_selected(path: String):
+	if FileAccess.file_exists(path):	
+		var file = FileAccess.open(path, FileAccess.READ)
+		var _header = file.get_csv_line()
+		
+		var lines: Array[PackedStringArray] = []
+		while not file.eof_reached():
+			lines.append(file.get_csv_line())
+		
+		traces = Serialization.import(lines)
+	
+		character_list.clear()
+		for trace in traces:
+			character_list.add_item("%s" % trace.character)
+		
+		character_list.select(0)
+		change_character(0)
+		
+		%FileMenuButton.get_popup().set_item_disabled(1, false)
+		%TraceControlsPanel.visible = true
+		
+		for idx in range(0, %EditMenuButton.get_popup().get_item_count()):
+			%EditMenuButton.get_popup().set_item_disabled(idx, false)
+		
+		return true
+	return false
+
+
+func save_file_selected(path: String):
+	var file = FileAccess.open(path, FileAccess.WRITE)
+	var lines = Serialization.export(traces)
+	for line in lines:
+		file.store_csv_line(line)
+	file.close()
+	return true
+		
+
+func _on_edit_item_menu_pressed(id: int):
+	var all_points: Array = stroke_point_nodes[selected_stroke_index]
+	var selected_points = all_points.filter(func(point): return point.is_selected)
+	
+	if selected_points.size() == 0:
+		return
+	
+	match id:
+		0: 
+			align_selected_points_left(selected_points)
+		1: 
+			align_selected_points_right(selected_points)
+		2: 
+			align_selected_points_top(selected_points)
+		3: 
+			align_selected_points_bottom(selected_points)
+		_: 
+			print("Unknown edit menu item")
+
+
+func align_selected_points_left(point_nodes: Array):
+	# pick the smallest X value and assign to all
+	var bounds = find_position_bounds(point_nodes)
+	assign_x_position_to(bounds.min.x, point_nodes)
+	refresh_stroke_tree_point_names()
+
+
+func align_selected_points_right(point_nodes: Array):
+	# pick the largest X value and assign to all
+	var bounds = find_position_bounds(point_nodes)
+	assign_x_position_to(bounds.max.x, point_nodes)
+	refresh_stroke_tree_point_names()
+
+
+func align_selected_points_top(point_nodes: Array):
+	# pick the smallest Y value and assign to all
+	var bounds = find_position_bounds(point_nodes)
+	assign_y_position_to(bounds.min.y, point_nodes)
+	refresh_stroke_tree_point_names()
+
+
+func align_selected_points_bottom(point_nodes: Array):
+	var bounds = find_position_bounds(point_nodes)
+	assign_y_position_to(bounds.max.y, point_nodes)
+	refresh_stroke_tree_point_names()
+	
+	
+func find_position_bounds(point_nodes: Array) -> Bounds:	
+	var bounds = Bounds.new()
+	for point in point_nodes:
+		bounds.fit(point.position)
+	return bounds
+
+
+func assign_x_position_to(x: int, point_nodes: Array):
+	for point in point_nodes:
+		var pos = point.position
+		pos.x = x
+		point.position = pos
+
+
+func assign_y_position_to(y: int, point_nodes: Array):
+	for point in point_nodes:
+		var pos = point.position
+		pos.y = y
+		point.position = pos
