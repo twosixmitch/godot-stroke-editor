@@ -3,6 +3,7 @@ class_name Bounds
 var min: Vector2 = Vector2(9999999, 9999999)
 var max: Vector2 = Vector2(-9999999, -9999999)
 
+
 func fit(position: Vector2):
 	if position.x < min.x:
 		min.x = position.x

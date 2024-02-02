@@ -1,6 +1,6 @@
 class_name StrokeEditor 
-
 extends Control
+
 
 enum EditorMode { EDIT, ADD }
 
@@ -10,7 +10,8 @@ enum EditorMode { EDIT, ADD }
 @export var stroke_point_scene: PackedScene
 
 var traces: Array[Trace] = []
-var stroke_point_nodes: Dictionary
+var stroke_nodes: Array[StrokeNode]
+
 var selected_character_index: int = -1
 var selected_stroke_index: int = -1
 var selected_point_indices: Array = []
@@ -33,7 +34,7 @@ func _input(event):
 	if traces.size() == 0:
 		return
 	
-	if stroke_point_nodes.size() == 0:
+	if stroke_nodes.size() == 0:
 		return	
 	
 	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
@@ -48,6 +49,12 @@ func _input(event):
 	
 	if event is InputEventKey and event.keycode == KEY_CTRL:
 		ctrl_key_held = event.is_pressed()
+		
+	if event is InputEventKey and event.pressed and event.keycode == KEY_ESCAPE:
+		deselect_all_points()
+	
+	if event is InputEventKey and event.pressed and event.keycode == KEY_DELETE:
+		delete_selected_points()
 	
 	# Input based on Editor mode	
 	if editor_mode == EditorMode.ADD:
@@ -63,17 +70,12 @@ func _input(event):
 				elif !point.is_selected:
 					deselect_all_points()
 					point.select()
-					#handle_stroke_point_chosen(point.index)
 			else:
 				deselect_all_points()
 		if event is InputEventMouseMotion and left_mouse_held and ctrl_key_held:
 			move_selected_points(event.relative)
 	
-		if event is InputEventKey and event.pressed and event.keycode == KEY_ESCAPE:
-			deselect_all_points()
-		elif event is InputEventKey and event.pressed and event.keycode == KEY_DELETE:
-			delete_selected_points()
-		elif ctrl_key_held:
+		if ctrl_key_held:
 			if event is InputEventKey and event.keycode == KEY_A:
 				select_all_points()
 			if event is InputEventKey and event.keycode == KEY_D:
@@ -90,7 +92,7 @@ func _input(event):
 
 
 func collides_with_point(_position: Vector2) -> StrokePointNode:
-	for point: StrokePointNode in stroke_point_nodes[selected_stroke_index]:	
+	for point in stroke_nodes[selected_stroke_index].points:	
 		if point.collides_with(_position):
 			return point
 	return null
@@ -109,21 +111,22 @@ func collides_with_gui(_position: Vector2) -> bool:
 
 
 func add_point(_global_position: Vector2):
-	var stroke = stroke_point_nodes[selected_stroke_index]
-	var point = stroke_point_scene.instantiate() as StrokePointNode
+	var stroke_node = stroke_nodes[selected_stroke_index]
+	var point_node = stroke_point_scene.instantiate() as StrokePointNode
 	
-	stroke.append(point)
-	point.setup(stroke.size()-1)
+	stroke_node.points.append(point_node)
+	var point_index = stroke_node.points.size()-1
+	point_node.setup(point_index)
 	
-	%PointsContainer.add_child(point)
-	point.global_position = _global_position	
+	%PointsContainer.add_child(point_node)
+	point_node.global_position = _global_position	
 	
 	var root = stroke_tree.get_root()
 	var stroke_item = root.get_child(selected_stroke_index)
 	var point_item = stroke_tree.create_item(stroke_item)
 	
-	var pos = point.position
-	point_item.set_text(0, "Point %s  (%s, %s)" % [point.index, pos.x, pos.y])
+	var pos = point_node.position
+	point_item.set_text(0, "Point %s  (%s, %s)" % [point_index, pos.x, pos.y])
 	point_item.set_meta("type", "point")
 
 
@@ -131,10 +134,10 @@ func move_selected_points(direction: Vector2):
 	if shift_key_held:
 		direction = direction * 10
 		
-	var stroke = stroke_point_nodes[selected_stroke_index]
-	for point in stroke:
-		if point.is_selected:
-			point.position = point.position + direction
+	var stroke_node = stroke_nodes[selected_stroke_index]
+	for point_node in stroke_node.points:
+		if point_node.is_selected:
+			point_node.position = point_node.position + direction
 	
 	refresh_stroke_tree_point_names()
 
@@ -143,14 +146,30 @@ func refresh_stroke_tree_point_names():
 	var root = stroke_tree.get_root()
 	var stroke_item = root.get_child(selected_stroke_index)
 	
-	var stroke = stroke_point_nodes[selected_stroke_index]
+	var stroke_node = stroke_nodes[selected_stroke_index]
 	
-	for point in stroke:
-		var point_item = stroke_item.get_child(point.index)
-		point_item.set_text(0, "Point %s  (%s, %s)" % [point.index, point.position.x, point.position.y])		
+	for point_node in stroke_node.points:
+		var point_item = stroke_item.get_child(point_node.index)
+		var pos = point_node.position
+		point_item.set_text(0, "Point %s  (%s, %s)" % [point_node.index, pos.x, pos.y])
 
 
-func change_character(index: int):
+func save_changes():
+	var trace = traces[selected_character_index]
+	trace.strokes.clear()
+	
+	for stroke_node in stroke_nodes:
+		var stroke = Trace.Stroke.new()
+		
+		for point_node in stroke_node.points:
+			stroke.points.append(point_node.position)
+		trace.strokes.append(stroke)
+
+
+func change_character(index: int, save_changes: bool = false):
+	if save_changes:
+		save_changes()
+	
 	selected_character_index = index
 	
 	editor_mode = EditorMode.EDIT
@@ -160,54 +179,53 @@ func change_character(index: int):
 	selected_stroke_index = -1
 	stroke_tree.clear()
 	
-	for key in stroke_point_nodes.keys():
-		for point in stroke_point_nodes[key]:
-			point.queue_free()
-	stroke_point_nodes.clear()
+	for stroke_node in stroke_nodes:
+		for point_node in stroke_node.points:
+			point_node.queue_free()
+	stroke_nodes.clear()
 	
 	var trace = traces[index]
 	%CharacterLabel.text = "%s" % trace.character
 	
 	if trace.strokes.size() > 0:
-		create_stroke_point_nodes(trace)
+		create_stroke_nodes(trace)
 		create_stroke_tree()
 		change_stroke(0)
 
 
-func create_stroke_point_nodes(trace: Trace):
+func create_stroke_nodes(trace: Trace):
 	for s_idx in range(0, trace.strokes.size()):
 		var stroke = trace.strokes[s_idx]
 		var active = s_idx == 0
 		
-		stroke_point_nodes[s_idx] = []
+		stroke_nodes.append(StrokeNode.new(s_idx))
 		
 		for p_idx in range(0, stroke.points.size()):
-			var point = stroke_point_scene.instantiate() as StrokePointNode
-			point.setup(p_idx)
-			point.make_active(active)
+			var point_node = stroke_point_scene.instantiate() as StrokePointNode
+			point_node.setup(p_idx)
+			point_node.make_active(active)
 			
-			%PointsContainer.add_child(point)
-			stroke_point_nodes[s_idx].append(point)
+			%PointsContainer.add_child(point_node)
+			stroke_nodes[s_idx].points.append(point_node)
 			
 			# TODO: point_node.position = (point_position * trace_scale_vec) + translation
-			point.position = stroke.points[p_idx]
-			
-			
+			point_node.position = stroke.points[p_idx]
+
+
 func create_stroke_tree():
 	var root = stroke_tree.create_item()
 	stroke_tree.hide_root = true
-	
-	for s_idx in stroke_point_nodes.keys():
+
+	for stroke_node in stroke_nodes:
 		var stroke_item = stroke_tree.create_item(root)
-		stroke_item.set_text(0, "Stroke %s" % s_idx)
+		stroke_item.set_text(0, "Stroke %s" % stroke_node.index)
 		stroke_item.set_meta("type", "stroke")
 		
-		var stroke_points = stroke_point_nodes[s_idx]
-		for point_node in stroke_points:
+		for point_node in stroke_node.points:
 			var point_item = stroke_tree.create_item(stroke_item)	
 			var pos = point_node.position
 			point_item.set_text(0, "Point %s  (%s, %s)" % [point_node.index, pos.x, pos.y])
-			point_item.set_meta("type", "point")
+			point_item.set_meta("type", "point") 
 
 
 func change_stroke(stroke_index):
@@ -222,53 +240,53 @@ func change_stroke(stroke_index):
 	
 	# We are changing the selected stroke
 	if old_stroke_index > -1:
-		for point in stroke_point_nodes[old_stroke_index]:
-			point.deselect()
-			point.make_active(false)
+		for point_node in stroke_nodes[old_stroke_index].points:
+			point_node.deselect()
+			point_node.make_active(false)
 	
-	for point in stroke_point_nodes[new_stroke_index]:
-		point.make_active(true)
+	for point_node in stroke_nodes[new_stroke_index].points:
+		point_node.make_active(true)
 
 
 func select_point(point_index: int):
 	selected_point_indices.push_back(point_index)
-	var point = stroke_point_nodes[selected_stroke_index][point_index]
-	point.select()
+	var point_node = stroke_nodes[selected_stroke_index].points[point_index]
+	point_node.select()
 
 
 func select_all_points():
-	for point in stroke_point_nodes[selected_stroke_index]:
-		point.select()
+	for point_node in stroke_nodes[selected_stroke_index].points:
+		point_node.select()
 
 
 func deselect_point(point_index: int):
-	var point = stroke_point_nodes[selected_stroke_index][point_index]
-	point.deselect()
+	var point_node = stroke_nodes[selected_stroke_index].points[point_index]
+	point_node.deselect()
 
 
 func deselect_all_points():
-	for point in stroke_point_nodes[selected_stroke_index]:
-		point.deselect()
+	for point_node in stroke_nodes[selected_stroke_index].points:
+		point_node.deselect()
 
 
 func delete_selected_points():
-	var stroke = stroke_point_nodes[selected_stroke_index]
-	var selected_points = stroke.filter(func(point): return point.is_selected)
+	var stroke_node = stroke_nodes[selected_stroke_index]
+	var selected_points = stroke_node.points.filter(func(point): return point.is_selected)
 	
 	# Gather up the indices of the selected point nodes
 	var selected_indices: Array = []
-	for idx in range(0, stroke.size()):
-		if stroke[idx].is_selected:
+	for idx in range(0, stroke_node.points.size()):
+		if stroke_node.points[idx].is_selected:
 			selected_indices.append(idx)
 	
 	# Delete the original point nodes
 	for selected_point in selected_points:
-		stroke.erase(selected_point)
+		stroke_node.points.erase(selected_point)
 		selected_point.queue_free()
 	
 	# Re-assign indices to remaining point nodes	
-	for idx in range(0, stroke.size()):
-		stroke[idx].setup(idx)
+	for idx in range(0, stroke_node.points.size()):
+		stroke_node.points[idx].setup(idx)
 	
 	# Clear out the deleted points from the stroke tree
 	var root = stroke_tree.get_root()
@@ -281,12 +299,31 @@ func delete_selected_points():
 	for tree_item in selected_tree_items:
 		stroke_tree_item.remove_child(tree_item)
 	
-	refresh_stroke_tree_point_names()
+	if stroke_node.points.size() == 0:
+		print("deleting stroke too")
+		root.remove_child(stroke_tree_item)
+		stroke_nodes.erase(stroke_node)
+		
+		for idx in range(0, stroke_nodes.size()):
+			stroke_nodes[idx].index = idx
+		
+		for s_idx in range(0, root.get_child_count()):
+			var stroke_item = root.get_child(s_idx)
+			stroke_item.set_text(0, "Stroke %s" % s_idx)
+		
+		if stroke_nodes.size() != 0:
+			var next_stroke_idx = max(0, selected_stroke_index-1)
+			selected_stroke_index = -1
+			change_stroke(next_stroke_idx)
+		else:
+			selected_stroke_index = -1
+	else:
+		refresh_stroke_tree_point_names()
 
 
 func _on_item_list_item_activated(index):
 	if index != selected_character_index:
-		change_character(index)
+		change_character(index, true)
 
 
 func _on_tree_item_activated():
@@ -320,19 +357,19 @@ func _on_tree_item_activated():
 
 
 func has_selected_points() -> bool:
-	var stroke = stroke_point_nodes[selected_stroke_index]
-	return stroke.any(func(point): return point.is_selected)
+	var stroke_node = stroke_nodes[selected_stroke_index]
+	return stroke_node.points.any(func(point): return point.is_selected)
 
 
 func handle_stroke_point_chosen(point_index: int):
-	var stroke = stroke_point_nodes[selected_stroke_index]
-	var selected_points = stroke.filter(func(point): return point.is_selected)
+	var stroke_node = stroke_nodes[selected_stroke_index]
+	var selected_points = stroke_node.points.filter(func(point): return point.is_selected)
 	
 	# Have I clicked on a point for the first time?
 	if selected_points.size() == 0:
 		select_point(point_index)
 	# Have I clicked on an already selected point?
-	elif stroke[point_index] in selected_points:
+	elif stroke_node.points[point_index] in selected_points:
 		deselect_point(point_index)
 	# I have clicked on a different point so I should switch selection to it
 	else:
@@ -348,7 +385,7 @@ func _on_add_check_box_pressed():
 	editor_mode = EditorMode.ADD
 	if selected_stroke_index > -1:
 		deselect_all_points()
-		
+
 
 func _on_file_item_menu_pressed(id: int):
 	match id:
@@ -396,11 +433,11 @@ func save_file_selected(path: String):
 		file.store_csv_line(line)
 	file.close()
 	return true
-		
+
 
 func _on_edit_item_menu_pressed(id: int):
-	var stroke = stroke_point_nodes[selected_stroke_index]
-	var selected_points = stroke.filter(func(point): return point.is_selected)
+	var stroke_node = stroke_nodes[selected_stroke_index]
+	var selected_points = stroke_node.points.filter(func(point): return point.is_selected)
 	
 	if selected_points.size() == 0 and id < 7:
 		return
@@ -423,33 +460,69 @@ func _on_edit_item_menu_pressed(id: int):
 		6:
 			EditMenu.distribute_points_vertically(selected_points)
 		8:
-			# TODO: increase stroke index
-			print("increase stroke index")
-			
+			decrease_stroke_index()
 		9:
-			# TODO: decrease stroke index
-			print("decrease stroke index")
+			increase_stroke_index()
 		11:
-			print("delete all  stuff!!!!!!!")
 			delete_all_strokes()
 		_: 
 			print("Unknown edit menu item")
+
+
+func decrease_stroke_index():
+	# Move this stroke earlier in the order.
+	if selected_stroke_index == 0:
+		return
+
+	var new_stroke_index = selected_stroke_index - 1
+	
+	# Update the stroke_nodes
+	stroke_nodes[selected_stroke_index].index = new_stroke_index
+	stroke_nodes[new_stroke_index].index = selected_stroke_index
+	stroke_nodes.sort_custom(func(a, b): return a.index > b.index)
+	
+	# TODO: Update the stroke_tree
+	
+	selected_stroke_index = new_stroke_index
+
+
+func increase_stroke_index():
+	# Move this stroke later in the order.
+	if selected_stroke_index == stroke_nodes.size() - 1:
+		return
+		
+	var new_stroke_index = selected_stroke_index + 1
+	
+	# Update the stroke_nodes
+	stroke_nodes[selected_stroke_index].index = new_stroke_index
+	stroke_nodes[new_stroke_index].index = selected_stroke_index
+	stroke_nodes.sort_custom(func(a, b): return a.index > b.index)
+	
+	# TODO: Update the stroke_tree
+	
+	selected_stroke_index = new_stroke_index
+
 
 func delete_all_strokes():
 	selected_stroke_index = -1
 	stroke_tree.clear()
 	
-	for key in stroke_point_nodes.keys():
-		for point in stroke_point_nodes[key]:
+	for stroke_node in stroke_nodes:
+		for point in stroke_node.points:
 			point.queue_free()
-	stroke_point_nodes.clear()
+	stroke_nodes.clear()
 
 
 func _on_add_stroke_button_pressed():
-	var stroke_count = stroke_point_nodes.size()
-	stroke_point_nodes[stroke_count] = []
+	var stroke_count = stroke_nodes.size()
+	stroke_nodes.append(StrokeNode.new(stroke_count))
 	
 	var root = stroke_tree.get_root()
 	var stroke_item = stroke_tree.create_item(root)
 	stroke_item.set_text(0, "Stroke %s" % stroke_count)
 	stroke_item.set_meta("type", "stroke")
+	
+	if stroke_count == 0:
+		selected_stroke_index = 0
+	else:
+		change_stroke(stroke_count)
