@@ -460,47 +460,32 @@ func _on_edit_item_menu_pressed(id: int):
 		6:
 			EditMenu.distribute_points_vertically(selected_points)
 		8:
-			decrease_stroke_index()
+			move_stroke(-1)
 		9:
-			increase_stroke_index()
+			move_stroke(1)
 		11:
 			delete_all_strokes()
 		_: 
 			print("Unknown edit menu item")
-
-
-func decrease_stroke_index():
-	# Move this stroke earlier in the order.
-	if selected_stroke_index == 0:
-		return
-
-	var new_stroke_index = selected_stroke_index - 1
 	
-	# Update the stroke_nodes
-	stroke_nodes[selected_stroke_index].index = new_stroke_index
-	stroke_nodes[new_stroke_index].index = selected_stroke_index
-	stroke_nodes.sort_custom(func(a, b): return a.index > b.index)
-	
-	# TODO: Update the stroke_tree
-	
-	selected_stroke_index = new_stroke_index
 
-
-func increase_stroke_index():
-	# Move this stroke later in the order.
-	if selected_stroke_index == stroke_nodes.size() - 1:
+func move_stroke(direction: int):
+	if selected_stroke_index + direction == -1:
 		return
 		
-	var new_stroke_index = selected_stroke_index + 1
-	
+	if selected_stroke_index + direction == stroke_nodes.size():
+		return
+		
+	var new_stroke_index = selected_stroke_index + direction
+		
 	# Update the stroke_nodes
 	stroke_nodes[selected_stroke_index].index = new_stroke_index
 	stroke_nodes[new_stroke_index].index = selected_stroke_index
-	stroke_nodes.sort_custom(func(a, b): return a.index > b.index)
-	
-	# TODO: Update the stroke_tree
-	
+	stroke_nodes.sort_custom(func(a, b): return a.index < b.index)
 	selected_stroke_index = new_stroke_index
+	
+	stroke_tree.clear()
+	create_stroke_tree()
 
 
 func delete_all_strokes():
