@@ -5,8 +5,12 @@ static func import(file_lines: Array[PackedStringArray]) -> Array[Trace]:
 	var results: Array[Trace] = []
 	
 	for line in file_lines:
+		if line.size() == 1:
+			continue
+	
 		var trace = Trace.new()
 		trace.character = line[0]
+		trace.font_size = line[1].to_int()
 		
 		var current_stroke_id: String = ""
 		var current_stroke: Trace.Stroke = null
@@ -21,8 +25,7 @@ static func import(file_lines: Array[PackedStringArray]) -> Array[Trace]:
 				current_stroke = Trace.Stroke.new()
 				trace.strokes.append(current_stroke)
 			
-			# TODO: Remove negative
-			var point = Vector2(int(point_x), -int(point_y))
+			var point = Vector2(int(point_x), int(point_y))
 			current_stroke.points.append(point)
 
 		results.append(trace)
@@ -30,11 +33,12 @@ static func import(file_lines: Array[PackedStringArray]) -> Array[Trace]:
 	return results
 
 
-static func export(traces: Array[Trace]) -> Array[PackedStringArray]:
+static func export(traces: Array[Trace], font_size: int) -> Array[PackedStringArray]:
 	var results: Array[PackedStringArray] = []
+	results.append(PackedStringArray(["Character", "Font Size", "Strokes"]))
 	
 	for trace in traces:
-		var values = [trace.character, "1000"]
+		var values = [trace.character, font_size]
 	
 		for s_idx in range(0, trace.strokes.size()):
 			var stroke = trace.strokes[s_idx]

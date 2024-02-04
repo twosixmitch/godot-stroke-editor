@@ -73,7 +73,7 @@ func _input(event):
 			else:
 				deselect_all_points()
 		if event is InputEventMouseMotion and left_mouse_held and ctrl_key_held:
-			move_selected_points(event.relative)
+			move_selected_points(Vector2(event.relative))
 	
 		if ctrl_key_held:
 			if event is InputEventKey and event.keycode == KEY_A:
@@ -137,9 +137,13 @@ func move_selected_points(direction: Vector2):
 	var stroke_node = stroke_nodes[selected_stroke_index]
 	for point_node in stroke_node.points:
 		if point_node.is_selected:
-			point_node.position = point_node.position + direction
-	
+			point_node.position = clamp_vector(point_node.position + direction)
+
 	refresh_stroke_tree_point_names()
+
+
+func clamp_vector(vector: Vector2) -> Vector2:
+	return Vector2(roundi(vector.x), roundi(vector.y))
 
 
 func refresh_stroke_tree_point_names():
@@ -194,6 +198,8 @@ func change_character(index: int, save_changes: bool = false):
 
 
 func create_stroke_nodes(trace: Trace):
+	var font_size = %CharacterLabel.get_theme_font_size("font_size")
+	
 	for s_idx in range(0, trace.strokes.size()):
 		var stroke = trace.strokes[s_idx]
 		var active = s_idx == 0
@@ -208,8 +214,9 @@ func create_stroke_nodes(trace: Trace):
 			%PointsContainer.add_child(point_node)
 			stroke_nodes[s_idx].points.append(point_node)
 			
-			# TODO: point_node.position = (point_position * trace_scale_vec) + translation
-			point_node.position = stroke.points[p_idx]
+			var trace_scale = float(font_size) / float(trace.font_size)
+			var trace_scale_vec = Vector2(trace_scale, trace_scale)
+			point_node.position = stroke.points[p_idx] * trace_scale_vec
 
 
 func create_stroke_tree():
@@ -427,10 +434,16 @@ func load_file_selected(path: String):
 
 
 func save_file_selected(path: String):
+	save_changes()
+	
 	var file = FileAccess.open(path, FileAccess.WRITE)
-	var lines = Serialization.export(traces)
+	
+	var font_size = %CharacterLabel.get_theme_font_size("font_size")
+	var lines = Serialization.export(traces, font_size)
+	
 	for line in lines:
 		file.store_csv_line(line)
+	
 	file.close()
 	return true
 
@@ -467,7 +480,7 @@ func _on_edit_item_menu_pressed(id: int):
 			delete_all_strokes()
 		_: 
 			print("Unknown edit menu item")
-	
+
 
 func move_stroke(direction: int):
 	if selected_stroke_index + direction == -1:
