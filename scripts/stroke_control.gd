@@ -1,27 +1,21 @@
-class_name StrokePointNode
-extends Node2D
+class_name StrokeControl extends Node2D
 
 
+var index: int = -1
 var is_active: bool
 var is_selected: bool
-var index: int
+var in_point: StrokeControlInOut
+var out_point: StrokeControlInOut
 
-const ACTIVE_COLOR = Color(0, 0, 0, 1)
-const IN_ACTIVE_COLOR = Color(0, 0, 0, 0.2)
+const ACTIVE_COLOR = Color(0.5, 0.5, 0.5, 1)
 const SELECTED_COLOR = Color(0.9, 0, 0.9, 1)
 
 
-func setup(_index: int):
-	index = _index
-	%Label.text = "%s" % index
+func setup(idx: int, pos: Vector2):
+	self.index = idx
+	self.position = pos
 	%Background.self_modulate = ACTIVE_COLOR
 
-
-func make_active(active: bool):
-	is_active = active
-	%Background.self_modulate = ACTIVE_COLOR if active else IN_ACTIVE_COLOR
-	%Label.visible = active
-	
 
 func select():
 	%Background.self_modulate = SELECTED_COLOR

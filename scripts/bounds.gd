@@ -1,6 +1,8 @@
 class_name Bounds
 
+@warning_ignore("shadowed_global_identifier")
 var min: Vector2 = Vector2(9999999, 9999999)
+@warning_ignore("shadowed_global_identifier")
 var max: Vector2 = Vector2(-9999999, -9999999)
 
 

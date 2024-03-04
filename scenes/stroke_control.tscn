@@ -1,0 +1,20 @@
+[gd_scene load_steps=3 format=3 uid="uid://cn7t4kaei5i0n"]
+
+[ext_resource type="Script" path="res://scripts/stroke_control.gd" id="1_xhs3v"]
+[ext_resource type="Texture2D" uid="uid://co270h3nbqagg" path="res://images/circle_64.png" id="2_pumue"]
+
+[node name="Control" type="Node2D"]
+scale = Vector2(0.4, 0.4)
+script = ExtResource("1_xhs3v")
+
+[node name="Background" type="Sprite2D" parent="."]
+unique_name_in_owner = true
+self_modulate = Color(0.933333, 0.933333, 0.933333, 1)
+position = Vector2(9.53674e-07, 0)
+texture = ExtResource("2_pumue")
+
+[node name="Center" type="Sprite2D" parent="."]
+self_modulate = Color(0, 0, 0, 1)
+position = Vector2(9.53674e-07, 0)
+scale = Vector2(0.2, 0.2)
+texture = ExtResource("2_pumue")

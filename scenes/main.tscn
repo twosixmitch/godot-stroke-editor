@@ -1,14 +1,17 @@
-[gd_scene load_steps=6 format=3 uid="uid://d178o8rq2hscr"]
+[gd_scene load_steps=9 format=3 uid="uid://d2n8g4ajdqv6k"]
 
-[ext_resource type="Script" path="res://scripts/stroke_editor.gd" id="1_55tkk"]
+[ext_resource type="Script" path="res://scripts/stroke_editor.gd" id="1_tr0kt"]
 [ext_resource type="FontFile" uid="uid://kjcvhktflru" path="res://fonts/NotoSansJP-Bold.ttf" id="2_4sacs"]
 [ext_resource type="PackedScene" uid="uid://befgeh4xinnpg" path="res://scenes/stroke_point.tscn" id="2_243nl"]
+[ext_resource type="PackedScene" uid="uid://cn7t4kaei5i0n" path="res://scenes/stroke_control.tscn" id="3_e7qni"]
+[ext_resource type="PackedScene" uid="uid://clmr7m46k41xh" path="res://scenes/stroke_control_in_out.tscn" id="4_ogsam"]
+[ext_resource type="Script" path="res://scripts/stroke_tree_view.gd" id="6_uldwi"]
+
+[sub_resource type="Curve2D" id="Curve2D_qv18v"]
 
 [sub_resource type="StyleBoxEmpty" id="StyleBoxEmpty_jp250"]
 
-[sub_resource type="ButtonGroup" id="ButtonGroup_f8v6g"]
-
-[node name="Control" type="Control" node_paths=PackedStringArray("character_list", "stroke_tree")]
+[node name="Control" type="Control"]
 layout_mode = 3
 anchors_preset = 15
 anchor_right = 1.0
@@ -17,10 +20,22 @@ grow_horizontal = 2
 grow_vertical = 2
 size_flags_horizontal = 4
 size_flags_vertical = 4
-script = ExtResource("1_55tkk")
-character_list = NodePath("UI/TraceControls/CharacterPanelContainer/VBoxContainer/ItemList")
-stroke_tree = NodePath("UI/TraceControls/StrokesPanelContainer/VBoxContainer/Tree")
+script = ExtResource("1_tr0kt")
 stroke_point_scene = ExtResource("2_243nl")
+stroke_control_scene = ExtResource("3_e7qni")
+stroke_control_in_out_scene = ExtResource("4_ogsam")
+
+[node name="VersionLabel" type="Label" parent="."]
+layout_mode = 1
+anchors_preset = 1
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -105.0
+offset_top = 13.0
+offset_right = -16.0
+offset_bottom = 36.0
+grow_horizontal = 0
+text = "version: 2.0"
 
 [node name="LoadFileDialog" type="FileDialog" parent="."]
 unique_name_in_owner = true
@@ -56,10 +71,40 @@ offset_bottom = 507.0
 grow_horizontal = 2
 grow_vertical = 2
 theme_override_fonts/font = ExtResource("2_4sacs")
-theme_override_font_sizes/font_size = 700
+theme_override_font_sizes/font_size = 1000
 text = "あ"
 horizontal_alignment = 1
 vertical_alignment = 1
+
+[node name="PathContainer" type="Control" parent="."]
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="StrokeLine" type="Line2D" parent="PathContainer"]
+unique_name_in_owner = true
+width = 2.0
+default_color = Color(0, 0, 0, 1)
+
+[node name="StrokePath" type="Path2D" parent="PathContainer"]
+unique_name_in_owner = true
+curve = SubResource("Curve2D_qv18v")
+
+[node name="ControlsContainer" type="Control" parent="."]
+unique_name_in_owner = true
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+grow_horizontal = 2
+grow_vertical = 2
 
 [node name="PointsContainer" type="Control" parent="."]
 unique_name_in_owner = true
@@ -168,7 +213,8 @@ text = "Characters"
 horizontal_alignment = 1
 vertical_alignment = 1
 
-[node name="ItemList" type="ItemList" parent="UI/TraceControls/CharacterPanelContainer/VBoxContainer"]
+[node name="CharacterList" type="ItemList" parent="UI/TraceControls/CharacterPanelContainer/VBoxContainer"]
+unique_name_in_owner = true
 layout_mode = 2
 size_flags_vertical = 3
 focus_mode = 0
@@ -190,6 +236,13 @@ size_flags_vertical = 3
 layout_mode = 2
 mouse_filter = 0
 
+[node name="PreviewButton" type="CheckButton" parent="UI/TraceControls/StrokesPanelContainer/VBoxContainer"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 32)
+layout_mode = 2
+disabled = true
+text = "Preview"
+
 [node name="Label" type="Label" parent="UI/TraceControls/StrokesPanelContainer/VBoxContainer"]
 layout_mode = 2
 mouse_filter = 0
@@ -197,71 +250,22 @@ theme_override_font_sizes/font_size = 24
 text = "Strokes"
 horizontal_alignment = 1
 
-[node name="Tree" type="Tree" parent="UI/TraceControls/StrokesPanelContainer/VBoxContainer"]
+[node name="StrokeTree" type="Tree" parent="UI/TraceControls/StrokesPanelContainer/VBoxContainer"]
+unique_name_in_owner = true
 layout_mode = 2
 size_flags_vertical = 3
 focus_mode = 0
 scroll_horizontal_enabled = false
+script = ExtResource("6_uldwi")
 
 [node name="AddStrokeButton" type="Button" parent="UI/TraceControls/StrokesPanelContainer/VBoxContainer"]
 unique_name_in_owner = true
 layout_mode = 2
+disabled = true
 text = "add stroke"
 
-[node name="EditorControlsPanel" type="Panel" parent="."]
-unique_name_in_owner = true
-visible = false
-layout_mode = 1
-anchors_preset = 7
-anchor_left = 0.5
-anchor_top = 1.0
-anchor_right = 0.5
-anchor_bottom = 1.0
-offset_left = -124.5
-offset_top = -78.0
-offset_right = 124.5
-offset_bottom = -19.0
-grow_horizontal = 2
-grow_vertical = 0
-
-[node name="VBoxContainer" type="HBoxContainer" parent="EditorControlsPanel"]
-layout_mode = 1
-anchors_preset = 8
-anchor_left = 0.5
-anchor_top = 0.5
-anchor_right = 0.5
-anchor_bottom = 0.5
-offset_left = -77.5
-offset_top = -21.0
-offset_right = 77.5
-offset_bottom = 21.0
-grow_horizontal = 2
-grow_vertical = 2
-theme_override_constants/separation = 10
-
-[node name="EditCheckBox" type="CheckBox" parent="EditorControlsPanel/VBoxContainer"]
-unique_name_in_owner = true
-layout_mode = 2
-focus_mode = 0
-theme_override_font_sizes/font_size = 24
-button_pressed = true
-keep_pressed_outside = true
-button_group = SubResource("ButtonGroup_f8v6g")
-text = "edit"
-
-[node name="AddCheckBox" type="CheckBox" parent="EditorControlsPanel/VBoxContainer"]
-unique_name_in_owner = true
-layout_mode = 2
-focus_mode = 0
-theme_override_font_sizes/font_size = 24
-button_group = SubResource("ButtonGroup_f8v6g")
-text = "add"
-
-[connection signal="item_activated" from="UI/TraceControls/CharacterPanelContainer/VBoxContainer/ItemList" to="." method="_on_item_list_item_activated"]
-[connection signal="item_clicked" from="UI/TraceControls/CharacterPanelContainer/VBoxContainer/ItemList" to="." method="_on_item_list_item_clicked"]
-[connection signal="button_clicked" from="UI/TraceControls/StrokesPanelContainer/VBoxContainer/Tree" to="." method="_on_tree_button_clicked"]
-[connection signal="item_activated" from="UI/TraceControls/StrokesPanelContainer/VBoxContainer/Tree" to="." method="_on_tree_item_activated"]
-[connection signal="item_selected" from="UI/TraceControls/StrokesPanelContainer/VBoxContainer/Tree" to="." method="_on_tree_item_selected"]
+[connection signal="item_activated" from="UI/TraceControls/CharacterPanelContainer/VBoxContainer/CharacterList" to="." method="_on_item_list_item_activated"]
+[connection signal="item_clicked" from="UI/TraceControls/CharacterPanelContainer/VBoxContainer/CharacterList" to="." method="_on_item_list_item_clicked"]
+[connection signal="toggled" from="UI/TraceControls/StrokesPanelContainer/VBoxContainer/PreviewButton" to="." method="_on_preview_button_toggled"]
+[connection signal="item_activated" from="UI/TraceControls/StrokesPanelContainer/VBoxContainer/StrokeTree" to="UI/TraceControls/StrokesPanelContainer/VBoxContainer/StrokeTree" method="_on_tree_item_activated"]
 [connection signal="pressed" from="UI/TraceControls/StrokesPanelContainer/VBoxContainer/AddStrokeButton" to="." method="_on_add_stroke_button_pressed"]
-[connection signal="pressed" from="EditorControlsPanel/VBoxContainer/EditCheckBox" to="." method="_on_edit_check_box_pressed"]
-[connection signal="pressed" from="EditorControlsPanel/VBoxContainer/AddCheckBox" to="." method="_on_add_check_box_pressed"]
