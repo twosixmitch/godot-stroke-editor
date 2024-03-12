@@ -19,7 +19,6 @@ var selected_stroke_control: StrokeControl
 
 var selected_character_index: int = -1
 var selected_stroke_index: int = -1
-var selected_point_indices: Array = []  # TODO: Rename to selected_control_indices?
 
 var left_mouse_held: bool
 var right_mouse_held: bool
@@ -203,7 +202,8 @@ func change_character(index: int):
 	
 	if is_previewing:
 		delete_preview_stroke_points()
-		create_points(%StrokePath)
+		#create_points(%StrokePath)
+		create_start_point(%StrokePath)
 		
 	
 func delete_stroke_controls():
@@ -240,8 +240,7 @@ func create_stroke_paths(trace: Trace):
 func change_stroke(stroke_index: int):
 	if stroke_index == selected_stroke_index:
 		return
-	
-	selected_point_indices = []
+
 	selected_stroke_index = stroke_index
 	
 	delete_stroke_controls()
@@ -331,14 +330,20 @@ func add_stroke_control(global_pos: Vector2):
 func move_selected_points(direction: Vector2):
 	if shift_key_held:
 		direction = direction * 10
+		
+	var stroke_path = stroke_paths[selected_stroke_index]
+	var moved = false
 	
-	# TODO:
-	#var stroke_node = stroke_nodes[selected_stroke_index]
-	#for point_node in stroke_node.points:
-		#if point_node.is_selected:
-			#point_node.position = clamp_vector(point_node.position + direction)
-#
-	#refresh_stroke_tree_point_names()
+	for control in stroke_controls:
+		if control.is_selected:
+			control.position = clamp_vector(control.position + direction)
+			%StrokePath.curve.set_point_position(control.index, control.position)
+			stroke_path.points[control.index].position = control.position
+			moved = true
+	
+	if moved:
+		stroke_tree_view.refresh_stroke(stroke_path)
+		refresh_stroke_line()
 
 
 func move_control_point(controls: Array[StrokeControl], direction: Vector2):
@@ -392,7 +397,6 @@ func create_in_out_points(stroke_control: StrokeControl):
 
 
 func select_point(point_index: int):
-	selected_point_indices.push_back(point_index)
 	var stroke_control = stroke_controls[point_index]
 	stroke_control.select()
 
@@ -489,7 +493,8 @@ func _on_stroke_tree_stroke_selected(stroke_idx: int):
 	if is_previewing:
 		change_stroke(stroke_idx)
 		delete_preview_stroke_points()
-		create_points(%StrokePath)
+		#create_points(%StrokePath)
+		create_start_point(%StrokePath)
 		return
 	
 	if stroke_idx == selected_stroke_index:
@@ -505,7 +510,8 @@ func _on_stroke_tree_stroke_control_selected(stroke_idx: int, control_idx: int):
 	if is_previewing:
 		change_stroke(stroke_idx)
 		delete_preview_stroke_points()
-		create_points(%StrokePath)
+		#create_points(%StrokePath)
+		create_start_point(%StrokePath)
 		return
 		
 	if stroke_idx == selected_stroke_index:
@@ -595,7 +601,8 @@ func _on_preview_button_toggled(toggled_on):
 	
 	if toggled_on:
 		deselect_all_controls()
-		create_points(%StrokePath)
+		#create_points(%StrokePath)
+		create_start_point(%StrokePath)
 	else:
 		delete_preview_stroke_points()
 
@@ -622,6 +629,15 @@ func create_points(path: Path2D):
 		stroke_points.append(point_node)
 		%PointsContainer.add_child(point_node)
 		point_node.transform = baked * Transform2D.FLIP_Y
+
+
+func create_start_point(path: Path2D):	
+	var baked = path.curve.sample_baked_with_rotation(0)
+	var point_node = stroke_point_scene.instantiate() as StrokePointNode
+	point_node.setup(0)
+	stroke_points.append(point_node)
+	%PointsContainer.add_child(point_node)
+	point_node.transform = baked * Transform2D.FLIP_Y
 
 
 func delete_preview_stroke_points():

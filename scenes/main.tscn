@@ -88,7 +88,7 @@ grow_vertical = 2
 
 [node name="StrokeLine" type="Line2D" parent="PathContainer"]
 unique_name_in_owner = true
-width = 2.0
+width = 3.0
 default_color = Color(0, 0, 0, 1)
 
 [node name="StrokePath" type="Path2D" parent="PathContainer"]
